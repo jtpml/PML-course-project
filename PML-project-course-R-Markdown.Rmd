@@ -1,0 +1,89 @@
+---
+title: "PML course project"
+output: html_document
+---
+
+The aim of the project was to train the model to predict the quality of excercise based on a range of measurements taken at different parts of body from 6 participants and to predict the quality of excercise in another group of 20 participants. For more details see <http://groupware.les.inf.puc-rio.br/har> (section on the Weight Lifting Exercise Dataset).
+
+This website describes my approach to this task.
+
+
+Read in the training and testing datasets:
+
+```{r}
+training = read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+  na.strings = c("NA", "", "#DIV/0!"))
+testing = read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+  na.strings = c("NA", "", "#DIV/0!"))
+```
+
+Define which predictors should be used based on their availability in the testing dataset (remove unnecessary columns such as index, name, date etc. and remove empty columns):
+
+```{r}
+testing.truncated = testing[, -c(1:7)]
+testing.truncated <- Filter(function(x)!all(is.na(x)), testing.truncated)
+predictors = names(testing.truncated)
+predictors = predictors[predictors != "problem_id"]
+```
+
+Extract necessary columns from the training dataset:
+
+```{r}
+training.truncated = training[, c(predictors, "classe")]
+```
+
+Split the training set into training and validation data (p was set to low value due to slow computer):
+
+```{r}
+require(caret)
+require(randomForest)
+require(e1071)
+inTrain = createDataPartition(y = training.truncated$classe, p = 0.2, list = FALSE)
+training.final = training.truncated[inTrain, ]
+validation = training.truncated[-inTrain, ]
+```
+
+Train random forest algorithm with 5-fold cross-validation:
+
+```{r}
+modFit0.2 = train(classe ~ ., data = training.final, method = "rf",
+  trControl=trainControl(method = "cv", number = 5), prox = TRUE, allowParallel = TRUE)
+``` 
+
+```{r}
+modFit0.2
+```
+
+**5-fold cross-validation accuracy was around 96%.**
+
+Check accuracy in the validation set:
+
+```{r}
+pred = predict(modFit0.2, validation)
+validation$predRight = pred == validation$classe
+validation.accuracy = length(validation$predRight[validation$predRight == T])/nrow(validation)
+```
+
+```{r}
+validation.accuracy
+```
+
+Here accuracy was a bit higher (97.6%).
+
+**Based on the calculations from the training and validation sets, out-of sample-error is expected to be around 3%.**
+
+So wee need a bit of luck to get all 20 testing examples classified correctly :)
+
+
+
+Finally, predict `classe` for the testing dataset:
+
+```{r}
+pred.test = predict(modFit0.2, testing)
+testing$pred = pred.test
+```
+
+```{r}
+testing[, c("problem_id", "pred")]
+```
+
